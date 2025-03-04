@@ -14,6 +14,7 @@ from utils import (
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CallbackContext
 from config import TELEGRAM_BOT_TOKEN, BSCSCAN_API_KEY
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -246,6 +247,7 @@ async def stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wallet_address = data.split(":", 1)[1]
         await query.edit_message_text(f"✅ Continuing to watch wallet: {wallet_address}.")
 
+# Main
 def main():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
