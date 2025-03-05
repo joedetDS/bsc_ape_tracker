@@ -52,7 +52,7 @@ $ python bot.py
 ```
 
 ## Deployment 🚀
-This bot can be deployed on platforms like Heroku, Render, or a VPS.
+This bot can be deployed on platforms like Heroku, Railyway, Render, or a VPS.
 
 For Heroku, create a `Procfile`:
 ```sh
@@ -70,7 +70,7 @@ $ git push heroku main
 - `config.py` - Configuration settings
 - `utils.py` - Utility functions for wallet tracking and token analysis
 - `requirements.txt` - Dependencies list
-- `Procfile.txt` - Deployment file for Heroku
+- `Procfile.txt` - Deployment file for Railway
 
 ## Contributing 🤝
 Feel free to fork this repository and submit pull requests to improve the bot. Open an issue for bug reports or feature requests.
