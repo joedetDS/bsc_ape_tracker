@@ -62,12 +62,12 @@ HELP_MESSAGE = """📌 <b>Available Commands:</b>\n
 
 # ========== Helper Functions ==========
 def get_wallet_display(chat_id: int, wallet_address: str) -> str:
-    """Get formatted wallet name with address from database."""
+    """Get the display name for a wallet; use custom name if set, otherwise wallet address."""
     wallets = get_wallets(chat_id)
     for wallet, custom_name in wallets:
         if wallet == wallet_address and custom_name:
-            return f"{custom_name} ({wallet_address})"
-    return wallet_address
+            return custom_name  # Show only the custom name if it exists
+    return wallet_address  # Default to address if no custom name
 
 # ========== Command Handlers ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,7 +98,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def generate_profile_message(chat_id: int, wallet_address: str, is_refresh=False):
-    """Generate the portfolio message for a wallet."""
+    """Generate the portfolio message for a wallet using its display name."""
+    display_name = get_wallet_display(chat_id, wallet_address)
     native_bnb = get_bnb_balance(wallet_address)
     bnb_price = get_bnb_price()
     bnb_usd_value = float(native_bnb) * float(bnb_price)
@@ -107,7 +108,7 @@ async def generate_profile_message(chat_id: int, wallet_address: str, is_refresh
     filtered_tokens = [token for token in all_tokens if token["balance"] > 0 and token["symbol"].upper() != "BNB"]
     display_tokens = filtered_tokens[:10] if len(filtered_tokens) > 10 else filtered_tokens
     
-    message = f"📊 *Portfolio for {wallet_address}*\n\n"
+    message = f"📊 *Portfolio for {display_name}*\n\n"
     message += f"💰 *BNB Balance:* {native_bnb:,.7f} BNB (~${bnb_usd_value:,.2f} USD)\n\n"
     message += f"🔢 *Tokens Held:* {len(filtered_tokens):,}\n"
     for token in display_tokens:
@@ -176,7 +177,8 @@ async def watch_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TY
         if chat_id not in USER_WATCH_TASKS:
             USER_WATCH_TASKS[chat_id] = {}
         USER_WATCH_TASKS[chat_id][wallet_address] = task
-        await query.answer(f"✅ Now watching {wallet_address}.", show_alert=True)
+        display_name = get_wallet_display(chat_id, wallet_address)
+        await query.answer(f"✅ Now watching {display_name}.", show_alert=True)
 
 async def watch_wallet(wallet_address: str, chat_id: int, bot):
     """Monitor the wallet for new transactions and send updates."""
@@ -198,7 +200,7 @@ async def watch_wallet(wallet_address: str, chat_id: int, bot):
         wallets = get_wallets(chat_id)
         if not any(wallet == wallet_address for wallet, _ in wallets):
             logger.info(f"Stopped watching wallet {wallet_address} for chat_id {chat_id}")
-            break  # Stop if wallet is no longer being watched
+            break
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
@@ -215,8 +217,9 @@ async def watch_wallet(wallet_address: str, chat_id: int, bot):
                         amount = int(tx["value"]) / (10 ** token_decimal)
                         contract_address = tx["contractAddress"]
 
+                        display_name = get_wallet_display(chat_id, wallet_address)
                         message = (
-                            f"🚨 *New {tx_type} Transaction Detected for {get_wallet_display(chat_id, wallet_address)}!*\n\n"
+                            f"🚨 *New {tx_type} Transaction Detected for {display_name}!*\n\n"
                             f"• Token: {token_symbol}\n"
                             f"• Contract: {contract_address}\n"
                             f"• Amount: {amount:,.2f}\n"
@@ -234,7 +237,7 @@ async def watch_wallet(wallet_address: str, chat_id: int, bot):
         else:
             logger.warning(f"Failed to fetch transactions for {wallet_address}: HTTP {response.status_code}")
 
-        await asyncio.sleep(30)  # Poll every 30 seconds
+        await asyncio.sleep(30)
 
 async def watch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start watching a wallet for new transactions."""
@@ -249,8 +252,9 @@ async def watch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     wallets = get_wallets(chat_id)
     if any(wallet == wallet_address for wallet, _ in wallets):
+        display_name = get_wallet_display(chat_id, wallet_address)
         await update.message.reply_text(
-            f"Wallet {wallet_address} is already being watched.",
+            f"Wallet {display_name} is already being watched.",
             parse_mode="Markdown"
         )
     else:
@@ -259,8 +263,9 @@ async def watch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_id not in USER_WATCH_TASKS:
             USER_WATCH_TASKS[chat_id] = {}
         USER_WATCH_TASKS[chat_id][wallet_address] = task
+        display_name = get_wallet_display(chat_id, wallet_address)
         await update.message.reply_text(
-            f"✅ Started watching wallet: {wallet_address}.",
+            f"✅ Started watching wallet: {display_name}.",
             parse_mode="Markdown"
         )
 
@@ -272,7 +277,7 @@ async def watched(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No wallets are currently being watched.", parse_mode="Markdown")
     else:
         message = "👀 *Watched Wallets:*\n"
-        for idx, (wallet, custom_name) in enumerate(wallets, 1):
+        for idx, (wallet, _) in enumerate(wallets, 1):
             display_name = get_wallet_display(chat_id, wallet)
             message += f"{idx}. {display_name}\n"
         await update.message.reply_text(message, parse_mode="Markdown")
@@ -293,6 +298,7 @@ async def stopwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Select a wallet to stop watching:", reply_markup=reply_markup)
     else:
         wallet_address = context.args[0]
+        display_name = get_wallet_display(chat_id, wallet_address)
         keyboard = [
             [
                 InlineKeyboardButton(text="✅ Yes", callback_data=f"stop_yes:{wallet_address}"),
@@ -301,7 +307,8 @@ async def stopwatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            f"Do you want to stop watching wallet {wallet_address}?",
+            f"Do you want to stop watching {display_name}?",
+            parse_mode="Markdown",
             reply_markup=reply_markup
         )
 
@@ -311,9 +318,10 @@ async def stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     chat_id = query.message.chat_id
+    wallet_address = data.split(":", 1)[1]
+    display_name = get_wallet_display(chat_id, wallet_address)
 
     if data.startswith("confirm_stop:"):
-        wallet_address = data.split(":", 1)[1]
         keyboard = [
             [
                 InlineKeyboardButton(text="✅ Yes", callback_data=f"stop_yes:{wallet_address}"),
@@ -322,26 +330,33 @@ async def stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            f"Do you want to stop watching wallet {wallet_address}?",
+            f"Do you want to stop watching {display_name}?",
+            parse_mode="Markdown",
             reply_markup=reply_markup
         )
 
     elif data.startswith("stop_yes:"):
-        wallet_address = data.split(":", 1)[1]
         remove_wallet(chat_id, wallet_address)
         if chat_id in USER_WATCH_TASKS and wallet_address in USER_WATCH_TASKS[chat_id]:
             task = USER_WATCH_TASKS[chat_id].pop(wallet_address)
             task.cancel()
-        await query.edit_message_text(f"⏹️ Stopped watching wallet: {wallet_address}.")
+        await query.edit_message_text(
+            f"⏹️ Stopped watching {display_name}.",
+            parse_mode="Markdown"
+        )
 
     elif data.startswith("stop_no:"):
-        wallet_address = data.split(":", 1)[1]
-        await query.edit_message_text(f"✅ Continuing to watch wallet: {wallet_address}.")
+        await query.edit_message_text(
+            f"✅ Continuing to watch {display_name}.",
+            parse_mode="Markdown"
+        )
 
 # ========== Wallet Detection Handler ==========
 async def detect_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle raw wallet address messages and offer quick actions."""
     wallet_address = update.message.text.strip()
+    chat_id = update.effective_chat.id
+    display_name = get_wallet_display(chat_id, wallet_address)
     keyboard = [
         [
             InlineKeyboardButton("📊 View Portfolio", callback_data=f"quick_view:{wallet_address}"),
@@ -349,7 +364,8 @@ async def detect_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     await update.message.reply_text(
-        f"Detected BSC wallet: {wallet_address}",
+        f"Detected BSC wallet: {display_name}",
+        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -374,15 +390,16 @@ async def quick_watch_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     wallet_address = query.data.split(":")[1]
     chat_id = query.message.chat_id
     wallets = get_wallets(chat_id)
+    display_name = get_wallet_display(chat_id, wallet_address)
     if any(wallet == wallet_address for wallet, _ in wallets):
-        await query.answer("✅ Already watching this wallet!", show_alert=True)
+        await query.answer(f"✅ Already watching {display_name}!", show_alert=True)
     else:
         add_wallet(chat_id, wallet_address)
         task = asyncio.create_task(watch_wallet(wallet_address, chat_id, context.bot))
         if chat_id not in USER_WATCH_TASKS:
             USER_WATCH_TASKS[chat_id] = {}
         USER_WATCH_TASKS[chat_id][wallet_address] = task
-        await query.answer(f"✅ Now watching {wallet_address}.", show_alert=True)
+        await query.answer(f"✅ Now watching {display_name}.", show_alert=True)
 
 # ========== Renaming Feature ==========
 async def rename_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -451,7 +468,8 @@ def main():
                 if wallet_address not in USER_WATCH_TASKS[chat_id]:
                     task = asyncio.create_task(watch_wallet(wallet_address, chat_id, application.bot))
                     USER_WATCH_TASKS[chat_id][wallet_address] = task
-                    logger.info(f"Restarted watching wallet {wallet_address} for chat_id {chat_id}")
+                    display_name = get_wallet_display(chat_id, wallet_address)
+                    logger.info(f"Restarted watching wallet {display_name} for chat_id {chat_id}")
         conn.close()
     except sqlite3.Error as e:
         logger.error(f"Failed to restart wallet watching: {e}")
