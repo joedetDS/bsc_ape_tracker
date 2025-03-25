@@ -147,16 +147,24 @@ async def refresh_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     last_refresh_time[(user_id, wallet_address)] = current_time
-    await query.answer("Refreshing...")
+    await query.answer("Refreshing...")  # Immediate acknowledgment
     
     chat_id = query.message.chat_id
-    new_message, new_markup = await generate_profile_message(chat_id, wallet_address, is_refresh=True)
-    await query.edit_message_text(
-        new_message,
-        parse_mode="Markdown",
-        disable_web_page_preview=True,
-        reply_markup=new_markup
-    )
+    # Move slow work to a background task
+    asyncio.create_task(generate_and_edit_profile_message(chat_id, wallet_address, query, context))
+
+async def generate_and_edit_profile_message(chat_id, wallet_address, query, context):
+    """Generate and update the profile message in the background."""
+    try:
+        new_message, new_markup = await generate_profile_message(chat_id, wallet_address, is_refresh=True)
+        await query.edit_message_text(
+            new_message,
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+            reply_markup=new_markup
+        )
+    except Exception as e:
+        logger.error(f"Failed to refresh profile for wallet {wallet_address}: {e}")
 
 async def watch_wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the 'Watch Wallet' button click."""
