@@ -2,7 +2,6 @@ import os
 import time
 import asyncio
 import requests
-import sqlite3
 import logging
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -21,7 +20,7 @@ from utils import (
     get_bnb_price
 )
 from config import TELEGRAM_BOT_TOKEN, BSCSCAN_API_KEY
-from db import init_db, add_wallet, remove_wallet, get_wallets, add_seen_tx, get_seen_txs, update_wallet_name
+from firebase import add_wallet, remove_wallet, get_wallets, add_seen_tx, get_seen_txs, update_wallet_name, db
 from dotenv import load_dotenv
 
 # Configure logging
@@ -30,9 +29,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-# Initialize the database
-init_db()
 
 # ========== Global Variables ==========
 USER_WATCH_TASKS = {}  # Format: {chat_id: {wallet_address: task}}, for managing active tasks
@@ -54,10 +50,10 @@ HELP_MESSAGE = """📌 <b>Available Commands:</b>\n
 /help - Show this help message
 
 🔹 <b>Wallet Tracking Commands:</b>
-/profile <code>&lt;wallet_address&gt;</code> - View wallet portfolio
-/watch <code>&lt;wallet_address&gt;</code> - Start watching a wallet
+/profile <code><wallet_address></code> - View wallet portfolio
+/watch <code><wallet_address></code> - Start watching a wallet
 /watched - List watched wallets
-/stopwatch <code>&lt;wallet_address&gt;</code> - Stop watching a wallet
+/stopwatch <code><wallet_address></code> - Stop watching a wallet
 """
 
 # ========== Helper Functions ==========
@@ -454,13 +450,11 @@ def main():
         save_wallet_name
     ))
     
-    # Restart watching all wallets from the database
+    # Restart watching all wallets from Firestore
     try:
-        conn = sqlite3.connect("/data/bot_data.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT chat_id FROM user_wallets")
-        chat_ids = cursor.fetchall()
-        for (chat_id,) in chat_ids:
+        users = db.collection('users').get()
+        for user in users:
+            chat_id = int(user.id)  # Convert string ID back to int
             wallets = get_wallets(chat_id)
             if chat_id not in USER_WATCH_TASKS:
                 USER_WATCH_TASKS[chat_id] = {}
@@ -470,8 +464,7 @@ def main():
                     USER_WATCH_TASKS[chat_id][wallet_address] = task
                     display_name = get_wallet_display(chat_id, wallet_address)
                     logger.info(f"Restarted watching wallet {display_name} for chat_id {chat_id}")
-        conn.close()
-    except sqlite3.Error as e:
+    except Exception as e:
         logger.error(f"Failed to restart wallet watching: {e}")
 
     application.run_polling()
