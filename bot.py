@@ -50,10 +50,10 @@ HELP_MESSAGE = """📌 <b>Available Commands:</b>\n
 /help - Show this help message
 
 🔹 <b>Wallet Tracking Commands:</b>
-/profile <code><wallet_address></code> - View wallet portfolio
-/watch <code><wallet_address></code> - Start watching a wallet
+/profile <code>&lt;wallet_address&gt;</code> - View wallet portfolio
+/watch <code>&lt;wallet_address&gt;</code> - Start watching a wallet
 /watched - List watched wallets
-/stopwatch <code><wallet_address></code> - Stop watching a wallet
+/stopwatch <code>&lt;wallet_address&gt;</code> - Stop watching a wallet
 """
 
 # ========== Helper Functions ==========
